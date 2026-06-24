@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>TaskoraGo</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --gold: #f4a836;
+    --gold-dim: rgba(244,168,54,0.15);
+    --gold-border: rgba(244,168,54,0.3);
+    --bg: #0f0f1a;
+    --bg2: #1a1a2e;
+    --bg3: #16213e;
+    --text: #ffffff;
+    --text2: rgba(255,255,255,0.6);
+    --text3: rgba(255,255,255,0.35);
+    --border: rgba(255,255,255,0.08);
+    --green: #4caf82;
+    --green-dim: rgba(76,175,130,0.15);
+    --red: #ef5350;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+  /* Loading */
+  #loading { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; z-index: 100; }
+  .loader-fox { font-size: 48px; animation: bounce 0.8s infinite alternate; }
+  @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-12px); } }
+  .loader-text { font-size: 14px; color: var(--text2); }
+
+  /* App */
+  #app { display: none; flex-direction: column; min-height: 100vh; }
+
+  /* Header */
+  .header { background: var(--bg2); padding: 14px 16px 0; }
+  .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .fox-circle { width: 34px; height: 34px; border-radius: 50%; background: var(--gold); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .brand-name { font-size: 17px; font-weight: 600; color: var(--gold); }
+  .invite-btn { background: var(--gold); color: #1a1a2e; border: none; padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+  .balance-card { background: var(--gold-dim); border: 1px solid var(--gold-border); border-radius: 14px; padding: 16px; margin-bottom: 14px; text-align: center; }
+  .bal-label { font-size: 12px; color: var(--text3); margin-bottom: 3px; }
+  .bal-amount { font-size: 36px; font-weight: 700; color: var(--gold); line-height: 1; }
+  .bal-unit { font-size: 13px; color: var(--text3); margin-top: 3px; }
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .stat { background: rgba(0,0,0,0.2); border-radius: 10px; padding: 10px; text-align: center; }
+  .stat-val { font-size: 18px; font-weight: 600; }
+  .stat-lbl { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; padding: 12px 6px; text-align: center; font-size: 13px; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; font-weight: 500; }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  /* Content */
+  .content { flex: 1; padding: 14px; overflow-y: auto; }
+  .section-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin: 14px 0 8px; }
+  .section-label:first-child { margin-top: 0; }
+
+  /* Task card */
+  .task-card { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 12px; padding: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.15s; }
+  .task-card:active { background: rgba(255,255,255,0.08); transform: scale(0.98); }
+  .task-card.done { opacity: 0.55; pointer-events: none; }
+  .task-icon { width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .task-info { flex: 1; min-width: 0; }
+  .task-name { font-size: 14px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .task-right { text-align: right; flex-shrink: 0; }
+  .reward-amt { font-size: 14px; font-weight: 600; color: var(--gold); }
+  .reward-lbl { font-size: 10px; color: var(--text3); }
+  .done-pill { background: var(--green-dim); border: 1px solid rgba(76,175,130,0.3); border-radius: 20px; padding: 4px 10px; font-size: 11px; color: var(--green); white-space: nowrap; }
+
+  /* Referral */
+  .ref-card { background: var(--gold-dim); border: 1px solid var(--gold-border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .ref-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .ref-desc { font-size: 13px; color: var(--text2); line-height: 1.55; }
+  .ref-highlight { color: var(--gold); font-weight: 600; }
+  .ref-link-box { background: rgba(0,0,0,0.25); border-radius: 10px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 8px; }
+  .ref-url { font-size: 12px; color: var(--text2); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .copy-btn { background: var(--gold); color: #1a1a2e; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+  .friends-list { margin-top: 4px; }
+  .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .friend-row:last-child { border-bottom: none; }
+  .friend-name { color: var(--text2); }
+  .friend-earn { color: var(--gold); font-size: 12px; font-weight: 500; }
+  .empty-state { text-align: center; color: var(--text3); font-size: 13px; padding: 24px 0; }
+
+  /* Daily */
+  .daily-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 14px; }
+  .day-box { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 9px 4px; text-align: center; }
+  .day-box.claimed { background: rgba(76,175,130,0.12); border-color: rgba(76,175,130,0.3); }
+  .day-box.today { background: var(--gold-dim); border-color: var(--gold); }
+  .day-n { font-size: 10px; color: var(--text3); margin-bottom: 3px; }
+  .day-amt { font-size: 13px; font-weight: 600; color: var(--text2); }
+  .day-box.claimed .day-amt { color: var(--green); }
+  .day-box.today .day-n { color: var(--gold); }
+  .day-box.today .day-amt { color: var(--gold); }
+  .claim-hint { font-size: 12px; color: var(--text3); text-align: center; margin-bottom: 12px; }
+  .claim-btn { width: 100%; background: var(--gold); color: #1a1a2e; border: none; border-radius: 12px; padding: 15px; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.2s, transform 0.1s; }
+  .claim-btn:active { transform: scale(0.97); }
+  .claim-btn:disabled { background: rgba(255,255,255,0.1); color: var(--text3); cursor: not-allowed; }
+
+  /* Nav */
+  .nav { display: flex; background: var(--bg2); border-top: 1px solid var(--border); padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 4px; }
+  .nav-icon { font-size: 22px; line-height: 1; }
+  .nav-lbl { font-size: 10px; color: var(--text3); font-weight: 500; }
+  .nav-item.active .nav-icon { filter: none; }
+  .nav-item.active .nav-lbl { color: var(--gold); }
+  .nav-item.active .nav-icon { color: var(--gold); }
+
+  /* Toast */
+  .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-80px); background: rgba(30,30,50,0.95); border: 1px solid var(--gold-border); color: var(--text); padding: 10px 20px; border-radius: 25px; font-size: 13px; font-weight: 500; transition: transform 0.35s cubic-bezier(.34,1.56,.64,1); z-index: 999; white-space: nowrap; backdrop-filter: blur(8px); }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Panel hidden */
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="loader-fox">🦊</div>
+  <div class="loader-text">TaskoraGo Loading...</div>
+</div>
+
+<div id="app">
+  <div class="header">
+    <div class="top-row">
+      <div class="brand">
+        <div class="fox-circle">🦊</div>
+        <span class="brand-name">TaskoraGo</span>
+      </div>
+      <button class="invite-btn" onclick="shareInvite()">+ Invite</button>
+    </div>
+    <div class="balance-card">
+      <div class="bal-label">Total Balance</div>
+      <div class="bal-amount" id="balanceAmt">0</div>
+      <div class="bal-unit">TKR Tokens</div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-val" id="taskCount">0</div>
+          <div class="stat-lbl">Tasks done</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="refCount">0</div>
+          <div class="stat-lbl">Referrals</div>
+        </div>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('tasks')">Tasks</div>
+      <div class="tab" onclick="switchTab('referral')">Referral</div>
+      <div class="tab" onclick="switchTab('daily')">Daily</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Tasks panel -->
+    <div class="panel active" id="panel-tasks">
+      <div class="section-label">Available Tasks</div>
+      <div id="taskList"><div class="empty-state">Loading...</div></div>
+    </div>
+
+    <!-- Referral panel -->
+    <div class="panel" id="panel-referral">
+      <div class="ref-card">
+        <div class="ref-title">🎁 Invite friends, earn together!</div>
+        <div class="ref-desc">
+          For each invite you get <span class="ref-highlight">+1000 TKR</span><br>
+          Your friend gets <span class="ref-highlight">+500 TKR</span> bonus
+        </div>
+        <div class="ref-link-box">
+          <span class="ref-url" id="refUrl">t.me/TaskoraGoBot?start=...</span>
+          <button class="copy-btn" onclick="copyRef()">Copy</button>
+        </div>
+      </div>
+      <div class="section-label">Your Friends</div>
+      <div class="friends-list" id="friendsList">
+        <div class="empty-state">No friends yet — start inviting!</div>
+      </div>
+    </div>
+
+    <!-- Daily panel -->
+    <div class="panel" id="panel-daily">
+      <div class="section-label">Daily Login Bonus</div>
+      <div class="daily-grid" id="dailyGrid"></div>
+      <div class="claim-hint" id="claimHint">Login today to claim your bonus</div>
+      <button class="claim-btn" id="claimBtn" onclick="claimDaily()">Claim Daily Reward</button>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="nav-item active" id="nav-tasks" onclick="switchTab('tasks')">
+      <div class="nav-icon">✅</div>
+      <div class="nav-lbl">Tasks</div>
+    </div>
+    <div class="nav-item" id="nav-referral" onclick="switchTab('referral')">
+      <div class="nav-icon">👥</div>
+      <div class="nav-lbl">Friends</div>
+    </div>
+    <div class="nav-item" id="nav-daily" onclick="switchTab('daily')">
+      <div class="nav-icon">📅</div>
+      <div class="nav-lbl">Daily</div>
+    </div>
+    <div class="nav-item" id="nav-leaderboard" onclick="switchTab('leaderboard')">
+      <div class="nav-icon">🏆</div>
+      <div class="nav-lbl">Ranks</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =============================================
+// CONFIG — here your keys here
+// =============================================
+const SUPABASE_URL = 'https://zetsjntrzbuvfntkorzm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpldHNqbnRyemJ1dmZudGtvcnptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMjI4NjIsImV4cCI6MjA5Nzg5ODg2Mn0.Y1aVcYLhM4c-f6fBr6ZVeKf0i6a3Rx50dMDdw4lPgGc';
+const BOT_USERNAME = 'TaskoraGoBot';
+
+// =============================================
+// INIT
+// =============================================
+const tg = window.Telegram.WebApp;
+tg.expand();
+tg.setHeaderColor('#0f0f1a');
+tg.setBackgroundColor('#0f0f1a');
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let completedTasks = new Set();
+
+const DAILY_REWARDS = [100, 150, 200, 300, 400, 500, 750, 1000];
+const TASK_ICONS = {
+  telegram: { icon: '✈️', bg: 'rgba(41,182,246,0.15)' },
+  youtube:  { icon: '▶️', bg: 'rgba(239,83,80,0.15)' },
+  twitter:  { icon: '🐦', bg: 'rgba(41,182,246,0.10)' },
+  instagram:{ icon: '📸', bg: 'rgba(225,48,108,0.15)' },
+  default:  { icon: '⭐', bg: 'rgba(244,168,54,0.15)' }
+};
+
+async function init() {
+  const tgUser = tg.initDataUnsafe?.user;
+  if (!tgUser) {
+    // Dev mode — fake user for testing
+    currentUser = { id: 12345, username: 'testuser', first_name: 'Test', points: 0, referral_code: 'TEST123', daily_streak: 0 };
+    await loadAll();
+    return;
+  }
+
+  // Upsert user in DB
+  const refCode = tgUser.id.toString(36).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
+  const { data, error } = await supabase
+    .from('users')
+    .upsert({ id: tgUser.id, username: tgUser.username, first_name: tgUser.first_name }, { onConflict: 'id', ignoreDuplicates: false })
+    .select().single();
+
+  if (!error && data) {
+    if (!data.referral_code) {
+      await supabase.from('users').update({ referral_code: refCode }).eq('id', tgUser.id);
+      data.referral_code = refCode;
+    }
+    currentUser = data;
+    // Handle referral from start param
+    const startParam = tg.initDataUnsafe?.start_param;
+    if (startParam && startParam.startsWith('ref_') && !data.referred_by) {
+      const referrerCode = startParam.slice(4);
+      const { data: referrer } = await supabase.from('users').select('id').eq('referral_code', referrerCode).single();
+      if (referrer && referrer.id !== tgUser.id) {
+        await supabase.from('users').update({ referred_by: referrer.id }).eq('id', tgUser.id);
+        await addPoints(tgUser.id, 500, 'referral', 'Referral bonus');
+        await addPoints(referrer.id, 1000, 'referral', `Referred ${tgUser.first_name}`);
+        await supabase.from('referrals').insert({ referrer_id: referrer.id, referred_id: tgUser.id, bonus_paid: 1500 });
+      }
+    }
+  }
+
+  await loadAll();
+}
+
+async function loadAll() {
+  updateUI();
+  await Promise.all([loadTasks(), loadFriends(), buildDailyGrid()]);
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('refUrl').textContent = `t.me/${BOT_USERNAME}?start=ref_${currentUser?.referral_code || 'CODE'}`;
+}
+
+async function loadTasks() {
+  const { data: tasks } = await supabase.from('tasks').select('*').eq('is_active', true).order('id');
+  const { data: done } = await supabase.from('user_tasks').select('task_id').eq('user_id', currentUser?.id || 0);
+  completedTasks = new Set((done || []).map(r => r.task_id));
+
+  const html = (tasks || []).map(t => {
+    const ic = TASK_ICONS[t.type] || TASK_ICONS.default;
+    const isDone = completedTasks.has(t.id);
+    return `
+    <div class="task-card ${isDone ? 'done' : ''}" onclick="doTask(${t.id}, '${t.url}', ${t.reward}, '${t.title}')">
+      <div class="task-icon" style="background:${ic.bg}">${ic.icon}</div>
+      <div class="task-info">
+        <div class="task-name">${t.title}</div>
+        <div class="task-sub">${t.description || ''}</div>
+      </div>
+      <div class="task-right">
+        ${isDone
+          ? `<div class="done-pill">✓ Done</div>`
+          : `<div class="reward-amt">+${t.reward}</div><div class="reward-lbl">TKR</div>`}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('taskList').innerHTML = html || '<div class="empty-state">No tasks available</div>';
+  document.getElementById('taskCount').textContent = completedTasks.size;
+}
+
+async function loadFriends() {
+  const { data } = await supabase.from('referrals').select('referred_id, bonus_paid, users!referred_id(first_name, username)').eq('referrer_id', currentUser?.id || 0);
+  const friends = data || [];
+  document.getElementById('refCount').textContent = friends.length;
+  if (!friends.length) return;
+  const html = friends.map(f => {
+    const name = f.users?.first_name || f.users?.username || 'Friend';
+    return `<div class="friend-row"><span class="friend-name">👤 ${name}</span><span class="friend-earn">+1000 TKR</span></div>`;
+  }).join('');
+  document.getElementById('friendsList').innerHTML = html;
+}
+
+async function buildDailyGrid() {
+  const streak = currentUser?.daily_streak || 0;
+  const lastDaily = currentUser?.last_daily;
+  const today = new Date().toISOString().slice(0, 10);
+  const alreadyClaimed = lastDaily === today;
+
+  let html = '';
+  for (let i = 0; i < 8; i++) {
+    const isClaimed = i < streak;
+    const isToday = i === streak && !alreadyClaimed;
+    const cls = isClaimed ? 'claimed' : isToday ? 'today' : '';
+    const icon = isClaimed ? '✓' : isToday ? '★' : '';
+    html += `<div class="day-box ${cls}">
+      <div class="day-n">Day ${i+1} ${icon}</div>
+      <div class="day-amt">${DAILY_REWARDS[i]}</div>
+    </div>`;
+  }
+  document.getElementById('dailyGrid').innerHTML = html;
+
+  if (alreadyClaimed) {
+    document.getElementById('claimHint').textContent = '✓ Already claimed today';
+    document.getElementById('claimBtn').disabled = true;
+    document.getElementById('claimBtn').textContent = 'Come back tomorrow';
+  } else {
+    const reward = DAILY_REWARDS[Math.min(streak, 7)];
+    document.getElementById('claimHint').textContent = `Claim today — +${reward} TKR!`;
+    document.getElementById('claimBtn').textContent = `Claim (+${reward} TKR)`;
+  }
+}
+
+function updateUI() {
+  document.getElementById('balanceAmt').textContent = (currentUser?.points || 0).toLocaleString();
+}
+
+// =============================================
+// ACTIONS
+// =============================================
+async function doTask(taskId, url, reward, title) {
+  if (completedTasks.has(taskId)) return;
+  // Open the task URL
+  if (url && url !== 'https://youtube.com') tg.openLink(url);
+  // Wait 2s then mark complete
+  await new Promise(r => setTimeout(r, 2000));
+  const { error } = await supabase.from('user_tasks').insert({ user_id: currentUser.id, task_id: taskId });
+  if (!error) {
+    completedTasks.add(taskId);
+    await addPoints(currentUser.id, reward, 'task', title);
+    currentUser.points += reward;
+    updateUI();
+    loadTasks();
+    showToast(`✓ ${title} completed! +${reward} TKR`);
+    tg.HapticFeedback.notificationOccurred('success');
+  }
+}
+
+async function claimDaily() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (currentUser.last_daily === today) return;
+  const streak = currentUser.daily_streak || 0;
+  const reward = DAILY_REWARDS[Math.min(streak, 7)];
+  const newStreak = streak + 1;
+  await supabase.from('users').update({ points: (currentUser.points + reward), daily_streak: newStreak, last_daily: today }).eq('id', currentUser.id);
+  await addPoints(currentUser.id, reward, 'daily', `Day ${newStreak} daily bonus`);
+  currentUser.points += reward;
+  currentUser.daily_streak = newStreak;
+  currentUser.last_daily = today;
+  updateUI();
+  buildDailyGrid();
+  showToast(`🎉 Daily bonus! +${reward} TKR`);
+  tg.HapticFeedback.notificationOccurred('success');
+}
+
+async function addPoints(userId, amount, type, note) {
+  await supabase.from('transactions').insert({ user_id: userId, amount, type, note });
+  await supabase.from('users').update({ points: supabase.raw(`points + ${amount}`) }).eq('id', userId);
+}
+
+function shareInvite() {
+  const code = currentUser?.referral_code || 'CODE';
+  const url = `https://t.me/share/url?url=https://t.me/${BOT_USERNAME}?start=ref_${code}&text=🦊 Join TaskoraGo! Complete tasks and earn TKR Tokens. Join with my link and get +500 TKR bonus!`;
+  tg.openLink(url);
+}
+
+function copyRef() {
+  const code = currentUser?.referral_code || 'CODE';
+  const link = `https://t.me/${BOT_USERNAME}?start=ref_${code}`;
+  navigator.clipboard?.writeText(link);
+  showToast('✓ Referral link copied!');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['tasks','referral','daily','leaderboard'][i] === tab);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('panel-' + tab);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-' + tab)?.classList.add('active');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// Start!
+init().catch(e => {
+  console.error(e);
+  document.getElementById('loading').innerHTML = '<div style="color:red;padding:20px">Error: ' + e.message + '</div>';
+});
+</script>
+</body>
+</html>
